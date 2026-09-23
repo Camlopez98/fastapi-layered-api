@@ -9,6 +9,8 @@ duplicar lógica de "obtener el repositorio", "obtener el servicio" o
 
 from typing import Annotated
 from sqlalchemy.orm import Session
+from app.repositories.category_repository import CategoryRepository
+from app.services.category_service import CategoryService
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -76,3 +78,6 @@ async def get_current_active_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo.")
     return current_user
 
+def get_category_service(db: Session = Depends(get_db)) -> CategoryService:
+    repository = CategoryRepository(db)
+    return CategoryService(repository)

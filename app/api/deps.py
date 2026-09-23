@@ -8,8 +8,6 @@ duplicar lógica de "obtener el repositorio", "obtener el servicio" o
 """
 
 from typing import Annotated
-from app.repositories.product_repository import ProductRepository
-from app.services.product_service import ProductService
 from sqlalchemy.orm import Session
 
 import jwt
@@ -78,6 +76,3 @@ async def get_current_active_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo.")
     return current_user
 
-def get_product_service(db: Session = Depends(get_db)) -> ProductService:
-    repository = ProductRepository(db)
-    return ProductService(repository)

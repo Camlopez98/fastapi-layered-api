@@ -1,3 +1,7 @@
+"""
+Esquemas Pydantic para la entidad Category.
+"""
+
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
@@ -19,8 +23,8 @@ class CategoryUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class CategoryResponse(CategoryBase):
-    model_config = ConfigDict(from_attributes=True)
-
+class CategoryRead(CategoryBase):
     id: int
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

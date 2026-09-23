@@ -1,51 +1,80 @@
-from typing import List
-from fastapi import APIRouter, Depends, status
-from app.api.deps import get_category_service
-from app.schemas.category import CategoryCreate, CategoryResponse, CategoryUpdate
+"""
+Router de la API para la entidad Categoria.
+"""
+
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_db
+from app.repositories.category_repository import CategoryRepository
+from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.services.category_service import CategoryService
 
-router = APIRouter(prefix="/categories", tags=["Categories"])
+router = APIRouter(prefix="/categories", tags=["categories"])
 
 
-@router.get("/", response_model=List[CategoryResponse], summary="Consultar catalogo de categorias")
-def get_categories(
-    skip: int = 0,
-    limit: int = 100,
+def get_category_service(db: AsyncSession = Depends(get_db)) -> CategoryService:
+    repository = CategoryRepository(db)
+    return CategoryService(repository)
+
+
+@router.get("/", response_model=list[CategoryRead])
+async def list_categories(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     service: CategoryService = Depends(get_category_service),
-):
-    """Permite realizar consultas y paginacion sobre todas las categorias registradas."""
-    return service.list_categories(skip=skip, limit=limit)
+) -> Any:
+    categories, _ = await service.list_categories(offset=skip, limit=limit)
+    return categories
 
 
-@router.get("/{category_id}", response_model=CategoryResponse, summary="Consultar categoria por ID")
-def get_category(
+@router.get("/{category_id}", response_model=CategoryRead)
+async def get_category(
     category_id: int,
     service: CategoryService = Depends(get_category_service),
-):
-    """Consulta detallada de una categoria especifica por su identificador."""
-    return service.get_category(category_id)
+) -> Any:
+    category = await service.get_by_id(category_id)
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found",
+        )
+    return category
 
 
-@router.post("/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED, summary="Registrar categoria")
-def create_category(
+@router.post("/", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)
+async def create_category(
     category_in: CategoryCreate,
     service: CategoryService = Depends(get_category_service),
-):
-    return service.create_category(category_in)
+) -> Any:
+    return await service.create_category(category_in)
 
 
-@router.put("/{category_id}", response_model=CategoryResponse, summary="Actualizar categoria")
-def update_category(
+@router.put("/{category_id}", response_model=CategoryRead)
+async def update_category(
     category_id: int,
     category_in: CategoryUpdate,
     service: CategoryService = Depends(get_category_service),
-):
-    return service.update_category(category_id, category_in)
+) -> Any:
+    category = await service.update_category(category_id, category_in)
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found",
+        )
+    return category
 
 
-@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Eliminar categoria")
-def delete_category(
+@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_category(
     category_id: int,
     service: CategoryService = Depends(get_category_service),
-):
-    service.delete_category(category_id)
+) -> None:
+    deleted = await service.delete_category(category_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found",
+        )

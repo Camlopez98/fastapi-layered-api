@@ -40,6 +40,8 @@ async def lifespan(app: FastAPI):
     el esquema se gestiona con migraciones versionadas (Alembic) y esta
     línea se elimina -- ver README, sección "De este ejemplo a producción".
     """
+    import app.models  # noqa: F401
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

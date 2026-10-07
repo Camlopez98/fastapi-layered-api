@@ -1,39 +1,46 @@
-from typing import List, Optional
-from sqlalchemy.orm import Session
+"""
+Repositorio de Producto (patrón Repository).
+
+Mismo patrón que `UserRepository`: consultas SQLAlchemy asíncronas y solo
+`flush()`; el commit lo hace `get_db()` al final de la petición.
+"""
+
+from typing import Optional, Sequence
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductUpdate
 
+
 class ProductRepository:
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
-    def get_by_id(self, product_id: int) -> Optional[Product]:
-        return self.db.query(Product).filter(Product.id == product_id).first()
+    async def get_by_id(self, product_id: int) -> Optional[Product]:
+        return await self._session.get(Product, product_id)
 
-    def get_all(self, skip: int = 0, limit: int = 100) -> List[Product]:
-        return self.db.query(Product).offset(skip).limit(limit).all()
-
-    def create(self, product_in: ProductCreate) -> Product:
-        db_product = Product(
-            name=product_in.name,
-            description=product_in.description,
-            price=product_in.price,
-            is_available=product_in.is_available,
+    async def list(self, *, offset: int = 0, limit: int = 100) -> Sequence[Product]:
+        result = await self._session.execute(
+            select(Product).order_by(Product.id).offset(offset).limit(limit)
         )
-        self.db.add(db_product)
-        self.db.commit()
-        self.db.refresh(db_product)
-        return db_product
+        return result.scalars().all()
 
-    def update(self, db_product: Product, product_in: ProductUpdate) -> Product:
-        update_data = product_in.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(db_product, field, value)
-            
-        self.db.commit()
-        self.db.refresh(db_product)
-        return db_product
+    async def create(self, data: ProductCreate) -> Product:
+        product = Product(**data.model_dump())
+        self._session.add(product)
+        await self._session.flush()  # asigna el `id` sin cerrar la transacción
+        await self._session.refresh(product)
+        return product
 
-    def delete(self, db_product: Product) -> None:
-        self.db.delete(db_product)
-        self.db.commit()
+    async def update(self, product: Product, data: ProductUpdate) -> Product:
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(product, field, value)
+        await self._session.flush()
+        await self._session.refresh(product)
+        return product
+
+    async def delete(self, product: Product) -> None:
+        await self._session.delete(product)
+        await self._session.flush()

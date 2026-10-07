@@ -8,9 +8,6 @@ duplicar lógica de "obtener el repositorio", "obtener el servicio" o
 """
 
 from typing import Annotated
-from app.repositories.product_repository import ProductRepository
-from app.services.product_service import ProductService
-from sqlalchemy.orm import Session
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -20,7 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import UserNotFoundError
 from app.db.session import get_db
 from app.models.user import User
+from app.repositories.product_repository import ProductRepository
 from app.repositories.user_repository import UserRepository
+from app.services.product_service import ProductService
 from app.services.user_service import UserService
 
 # `tokenUrl` apunta al endpoint de login; esto es lo que hace que
@@ -78,6 +77,5 @@ async def get_current_active_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo.")
     return current_user
 
-def get_product_service(db: Session = Depends(get_db)) -> ProductService:
-    repository = ProductRepository(db)
-    return ProductService(repository)
+def get_product_service(db: Annotated[AsyncSession, Depends(get_db)]) -> ProductService:
+    return ProductService(ProductRepository(db))

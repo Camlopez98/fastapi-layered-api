@@ -1,42 +1,46 @@
-from typing import List
-from fastapi import HTTPException, status
+"""
+Servicio de Producto (capa de lógica de negocio).
+
+Aplica las reglas de negocio (el precio no puede ser negativo, el producto
+debe existir) y lanza excepciones de dominio; no conoce HTTP. El router
+traduce esas excepciones a códigos de estado.
+"""
+
+from typing import Optional, Sequence
+
+from app.core.exceptions import InvalidProductPriceError, ProductNotFoundError
 from app.models.product import Product
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import ProductCreate, ProductUpdate
 
-class ProductService:
-    def __init__(self, repository: ProductRepository):
-        self.repository = repository
 
-    def get_product(self, product_id: int) -> Product:
-        product = self.repository.get_by_id(product_id)
-        if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"El producto con id {product_id} no existe",
-            )
+class ProductService:
+    def __init__(self, repository: ProductRepository) -> None:
+        self._repository = repository
+
+    @staticmethod
+    def _validate_price(price: Optional[float]) -> None:
+        if price is not None and price < 0:
+            raise InvalidProductPriceError("El precio del producto no puede ser negativo.")
+
+    async def get_product(self, product_id: int) -> Product:
+        product = await self._repository.get_by_id(product_id)
+        if product is None:
+            raise ProductNotFoundError(f"El producto con id {product_id} no existe.")
         return product
 
-    def list_products(self, skip: int = 0, limit: int = 100) -> List[Product]:
-        return self.repository.get_all(skip=skip, limit=limit)
+    async def list_products(self, *, skip: int = 0, limit: int = 100) -> Sequence[Product]:
+        return await self._repository.list(offset=skip, limit=limit)
 
-    def create_product(self, product_in: ProductCreate) -> Product:
-        if product_in.price < 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El precio del producto no puede ser negativo",
-            )
-        return self.repository.create(product_in)
+    async def create_product(self, data: ProductCreate) -> Product:
+        self._validate_price(data.price)
+        return await self._repository.create(data)
 
-    def update_product(self, product_id: int, product_in: ProductUpdate) -> Product:
-        product = self.get_product(product_id)
-        if product_in.price is not None and product_in.price < 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El precio del producto no puede ser negativo",
-            )
-        return self.repository.update(product, product_in)
+    async def update_product(self, product_id: int, data: ProductUpdate) -> Product:
+        self._validate_price(data.price)
+        product = await self.get_product(product_id)
+        return await self._repository.update(product, data)
 
-    def delete_product(self, product_id: int) -> None:
-        product = self.get_product(product_id)
-        self.repository.delete(product)
+    async def delete_product(self, product_id: int) -> None:
+        product = await self.get_product(product_id)
+        await self._repository.delete(product)

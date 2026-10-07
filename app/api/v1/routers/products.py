@@ -1,57 +1,79 @@
-from typing import List
-from fastapi import APIRouter, Depends, status
-from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
-from app.services.product_service import ProductService
-from app.api.deps import get_product_service
+"""
+Router: Productos.
 
-# Prefijo para que todas las rutas empiecen con /products
-# 'tags' sirve para que en Swagger se agrupen bajo el título "Products"
+- Lectura pública (listar y consultar).
+- Crear, actualizar y eliminar exigen un usuario autenticado y activo
+  (OWASP API5:2023 Broken Function Level Authorization).
+- Las excepciones de dominio del servicio se traducen aquí a HTTP.
+"""
+
+from typing import Annotated, List
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from app.api.deps import get_current_active_user, get_product_service
+from app.core.exceptions import InvalidProductPriceError, ProductNotFoundError
+from app.models.user import User
+from app.schemas.common import ErrorResponse
+from app.schemas.product import ProductCreate, ProductResponse, ProductUpdate
+from app.services.product_service import ProductService
+
 router = APIRouter(prefix="/products", tags=["Products"])
 
+ServiceDep = Annotated[ProductService, Depends(get_product_service)]
+CurrentUser = Annotated[User, Depends(get_current_active_user)]
 
-@router.get("/", response_model=List[ProductResponse])
-def get_products(
-    skip: int = 0,
-    limit: int = 100,
-    service: ProductService = Depends(get_product_service),
+NOT_FOUND = {404: {"model": ErrorResponse, "description": "Producto no encontrado"}}
+
+
+def _not_found(error: ProductNotFoundError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error))
+
+
+def _bad_price(error: InvalidProductPriceError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))
+
+
+@router.get("/", response_model=List[ProductResponse], summary="Listar productos (paginado)")
+async def list_products(
+    service: ServiceDep,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
 ):
-    """Obtener lista paginada de productos."""
-    return service.list_products(skip=skip, limit=limit)
+    return await service.list_products(skip=skip, limit=limit)
 
 
-@router.get("/{product_id}", response_model=ProductResponse)
-def get_product(
-    product_id: int,
-    service: ProductService = Depends(get_product_service),
-):
-    """Obtener un producto por su identificador (ID)."""
-    return service.get_product(product_id)
+@router.get("/{product_id}", response_model=ProductResponse, responses=NOT_FOUND)
+async def get_product(product_id: int, service: ServiceDep):
+    try:
+        return await service.get_product(product_id)
+    except ProductNotFoundError as error:
+        raise _not_found(error)
 
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-def create_product(
-    product_in: ProductCreate,
-    service: ProductService = Depends(get_product_service),
+async def create_product(data: ProductCreate, service: ServiceDep, _: CurrentUser):
+    try:
+        return await service.create_product(data)
+    except InvalidProductPriceError as error:
+        raise _bad_price(error)
+
+
+@router.put("/{product_id}", response_model=ProductResponse, responses=NOT_FOUND)
+async def update_product(
+    product_id: int, data: ProductUpdate, service: ServiceDep, _: CurrentUser
 ):
-    """Registrar un nuevo producto en la tienda."""
-    return service.create_product(product_in)
+    try:
+        return await service.update_product(product_id, data)
+    except ProductNotFoundError as error:
+        raise _not_found(error)
+    except InvalidProductPriceError as error:
+        raise _bad_price(error)
 
 
-@router.put("/{product_id}", response_model=ProductResponse)
-def update_product(
-    product_id: int,
-    product_in: ProductUpdate,
-    service: ProductService = Depends(get_product_service),
-):
-    """Actualizar datos de un producto existente."""
-    return service.update_product(product_id, product_in)
-
-
-@router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_product(
-    product_id: int,
-    service: ProductService = Depends(get_product_service),
-):
-    """Eliminar un producto de la base de datos."""
-    service.delete_product(product_id)
-    return None
+@router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT, responses=NOT_FOUND)
+async def delete_product(product_id: int, service: ServiceDep, _: CurrentUser) -> None:
+    try:
+        await service.delete_product(product_id)
+    except ProductNotFoundError as error:
+        raise _not_found(error)

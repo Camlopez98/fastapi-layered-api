@@ -29,3 +29,11 @@ class InvalidCredentialsError(DomainError):
 
 class InactiveUserError(DomainError):
     """El usuario existe pero está deshabilitado."""
+
+
+class ProductNotFoundError(DomainError):
+    """El producto solicitado no existe."""
+
+
+class InvalidProductPriceError(DomainError):
+    """El precio del producto no es válido (por ejemplo, negativo)."""

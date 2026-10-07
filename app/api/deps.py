@@ -17,8 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import UserNotFoundError
 from app.db.session import get_db
 from app.models.user import User
+from app.repositories.category_repository import CategoryRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.user_repository import UserRepository
+from app.services.category_service import CategoryService
 from app.services.product_service import ProductService
 from app.services.user_service import UserService
 
@@ -79,3 +81,14 @@ async def get_current_active_user(
 
 def get_product_service(db: Annotated[AsyncSession, Depends(get_db)]) -> ProductService:
     return ProductService(ProductRepository(db))
+
+
+def get_category_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> CategoryRepository:
+    return CategoryRepository(db)
+
+
+def get_category_service(
+    repository: Annotated[CategoryRepository, Depends(get_category_repository)],
+) -> CategoryService:
+    return CategoryService(repository)
+

@@ -11,6 +11,7 @@ Casos de uso:
 
 - **Usuarios:** registro, login con OAuth2/JWT y gestión del propio perfil.
 - **Productos:** catálogo con CRUD completo; la consulta es pública y crear, editar o eliminar exige sesión.
+- **Categorías:** CRUD con nombres únicos; mismas reglas de acceso que los productos.
 
 Incluye pruebas automatizadas con pytest que se ejecutan en GitHub Actions en cada push y pull request.
 
@@ -71,18 +72,22 @@ fastapi-layered-api/
 │   │   └── session.py              # engine async + get_db() con commit-on-success
 │   ├── models/
 │   │   ├── user.py                 # Modelo ORM (tabla `users`)
-│   │   └── product.py              # Modelo ORM (tabla `products`)
+│   │   ├── product.py              # Modelo ORM (tabla `products`)
+│   │   └── category.py             # Modelo ORM (tabla `categories`)
 │   ├── schemas/
 │   │   ├── user.py                 # UserCreate / UserUpdate / UserPublic
 │   │   ├── product.py              # ProductCreate / ProductUpdate / ProductResponse
+│   │   ├── category.py             # CategoryCreate / CategoryUpdate / CategoryRead
 │   │   ├── auth.py                 # Token, LoginRequest
 │   │   └── common.py               # ErrorResponse
 │   ├── repositories/
 │   │   ├── user_repository.py      # CRUD puro contra la base de datos
-│   │   └── product_repository.py
+│   │   ├── product_repository.py
+│   │   └── category_repository.py
 │   ├── services/
 │   │   ├── user_service.py         # Reglas de negocio + orquestación
-│   │   └── product_service.py      # Reglas de productos (precio válido, existencia)
+│   │   ├── product_service.py      # Reglas de productos (precio válido, existencia)
+│   │   └── category_service.py     # Reglas de categorías (nombre único)
 │   └── api/
 │       ├── deps.py                 # Dependencias compartidas (DB, auth)
 │       └── v1/
@@ -90,12 +95,14 @@ fastapi-layered-api/
 │           └── routers/
 │               ├── auth.py         # POST /auth/register, /auth/login
 │               ├── users.py        # /users/me, /users, /users/{id}
-│               └── products.py     # /products, /products/{id}
+│               ├── products.py     # /products, /products/{id}
+│               └── categories.py   # /categories, /categories/{id}
 ├── tests/                          # pytest + httpx.AsyncClient
 │   ├── conftest.py
 │   ├── test_auth.py
 │   ├── test_users.py
-│   └── test_products.py
+│   ├── test_products.py
+│   └── test_categories.py
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
@@ -268,7 +275,7 @@ cada pull request (`.github/workflows/tests.yml`).
   - API2 *Broken Authentication* → JWT firmado, expiración corta,
     hashing Argon2, mitigación de timing attacks.
   - API5 *Broken Function Level Authorization* → crear, editar y eliminar
-    productos exige un usuario autenticado y activo.
+    productos y categorías exige un usuario autenticado y activo.
   - API8 *Security Misconfiguration* → manejador global que evita fugar
     detalles internos ante errores no controlados.
 - **Transacciones**: patrón *Unit of Work por request* (`commit` al

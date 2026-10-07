@@ -245,7 +245,7 @@ Los tests usan SQLite **en memoria** e inyectan la sesión de prueba con
 FastAPI: https://fastapi.tiangolo.com/tutorial/testing/), sin depender
 de la base de datos real ni de un servidor HTTP levantado.
 
-Las mismas pruebas se ejecutan en GitHub Actions en cada push a `main` y en
+Las mismas pruebas se ejecutan en GitHub Actions en cada push a `main` o `develop` y en
 cada pull request (`.github/workflows/tests.yml`).
 
 ---

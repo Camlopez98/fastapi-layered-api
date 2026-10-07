@@ -1,16 +1,18 @@
-# Users API — API REST en capas con FastAPI
+# API REST en capas con FastAPI
 
-API REST de ejemplo, **documentada paso a paso**, que implementa una
+[![Tests](https://github.com/Camlopez98/fastapi-layered-api/actions/workflows/tests.yml/badge.svg)](https://github.com/Camlopez98/fastapi-layered-api/actions/workflows/tests.yml)
+
+API REST **documentada paso a paso** que implementa una
 **arquitectura en capas** (layered architecture) con [FastAPI](https://fastapi.tiangolo.com/),
 siguiendo la documentación oficial de FastAPI, el estándar OAuth2/JWT
 (RFC 6749 / RFC 7519) y el **OWASP API Security Top 10 (2023)**.
 
-Caso de uso: gestión de usuarios con registro, login y autenticación JWT.
+Casos de uso:
 
-> Este proyecto es el material de acompañamiento de la presentación
-> `FastAPI - API REST en capas.pptx`. El código es funcional: fue instalado,
-> arrancado y probado end-to-end (registro, login, CRUD y errores) antes
-> de esta entrega.
+- **Usuarios:** registro, login con OAuth2/JWT y gestión del propio perfil.
+- **Productos:** catálogo con CRUD completo; la consulta es pública y crear, editar o eliminar exige sesión.
+
+Incluye pruebas automatizadas con pytest que se ejecutan en GitHub Actions en cada push y pull request.
 
 ---
 
@@ -68,31 +70,38 @@ fastapi-layered-api/
 │   │   ├── base.py                 # Declarative Base de SQLAlchemy
 │   │   └── session.py              # engine async + get_db() con commit-on-success
 │   ├── models/
-│   │   └── user.py                 # Modelo ORM (tabla `users`)
+│   │   ├── user.py                 # Modelo ORM (tabla `users`)
+│   │   └── product.py              # Modelo ORM (tabla `products`)
 │   ├── schemas/
 │   │   ├── user.py                 # UserCreate / UserUpdate / UserPublic
+│   │   ├── product.py              # ProductCreate / ProductUpdate / ProductResponse
 │   │   ├── auth.py                 # Token, LoginRequest
 │   │   └── common.py               # ErrorResponse
 │   ├── repositories/
-│   │   └── user_repository.py      # CRUD puro contra la base de datos
+│   │   ├── user_repository.py      # CRUD puro contra la base de datos
+│   │   └── product_repository.py
 │   ├── services/
-│   │   └── user_service.py         # Reglas de negocio + orquestación
+│   │   ├── user_service.py         # Reglas de negocio + orquestación
+│   │   └── product_service.py      # Reglas de productos (precio válido, existencia)
 │   └── api/
 │       ├── deps.py                 # Dependencias compartidas (DB, auth)
 │       └── v1/
 │           ├── api.py              # Agregador de routers v1
 │           └── routers/
 │               ├── auth.py         # POST /auth/register, /auth/login
-│               └── users.py        # /users/me, /users, /users/{id}
+│               ├── users.py        # /users/me, /users, /users/{id}
+│               └── products.py     # /products, /products/{id}
 ├── tests/                          # pytest + httpx.AsyncClient
 │   ├── conftest.py
 │   ├── test_auth.py
-│   └── test_users.py
+│   ├── test_users.py
+│   └── test_products.py
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
 ├── Dockerfile
-└── pytest.ini
+├── pytest.ini
+└── .github/workflows/tests.yml     # pytest en GitHub Actions
 ```
 
 ---
@@ -216,6 +225,13 @@ curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
 # 3) Usar el token
 curl http://127.0.0.1:8000/api/v1/users/me \
   -H "Authorization: Bearer <access_token>"
+
+# 4) Crear un producto (requiere token) y listarlos (público)
+curl -X POST http://127.0.0.1:8000/api/v1/products/ \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Teclado","price":150000}'
+curl http://127.0.0.1:8000/api/v1/products/
 ```
 
 ### Paso 13 — Tests automatizados
@@ -228,6 +244,9 @@ Los tests usan SQLite **en memoria** e inyectan la sesión de prueba con
 `app.dependency_overrides[get_db]` (mecanismo oficial de testing de
 FastAPI: https://fastapi.tiangolo.com/tutorial/testing/), sin depender
 de la base de datos real ni de un servidor HTTP levantado.
+
+Las mismas pruebas se ejecutan en GitHub Actions en cada push a `main` y en
+cada pull request (`.github/workflows/tests.yml`).
 
 ---
 
@@ -248,6 +267,8 @@ de la base de datos real ni de un servidor HTTP levantado.
     del recurso en cada endpoint de `/users/{id}`.
   - API2 *Broken Authentication* → JWT firmado, expiración corta,
     hashing Argon2, mitigación de timing attacks.
+  - API5 *Broken Function Level Authorization* → crear, editar y eliminar
+    productos exige un usuario autenticado y activo.
   - API8 *Security Misconfiguration* → manejador global que evita fugar
     detalles internos ante errores no controlados.
 - **Transacciones**: patrón *Unit of Work por request* (`commit` al
@@ -255,12 +276,12 @@ de la base de datos real ni de un servidor HTTP levantado.
 - **Configuración externalizada** (12-Factor App): nada de secretos en
   el código fuente.
 - **Contenedores**: `Dockerfile` con usuario no-root e imagen `slim`.
-- **Testing automatizado** con base de datos aislada por test.
+- **Testing automatizado** con base de datos aislada por test, ejecutado
+  en integración continua (GitHub Actions).
 
 ## 5. De este ejemplo a producción
 
-Este proyecto es un ejemplo educativo. Antes de usarlo en producción,
-considera:
+Antes de usar este proyecto en producción, conviene:
 
 1. **Migraciones versionadas** con [Alembic](https://alembic.sqlalchemy.org/)
    en lugar de `Base.metadata.create_all` en el `lifespan`.
@@ -270,7 +291,7 @@ considera:
 4. **Logging estructurado** y correlación de requests (request id).
 5. **Refresh tokens** y una estrategia de revocación de tokens (deny-list
    o tokens de corta duración + refresh).
-6. **CI/CD** ejecutando `pytest` y linters (`ruff`, `mypy`) en cada PR.
+6. **Linters en CI** (`ruff`, `mypy`) además de las pruebas que ya se ejecutan en cada PR.
 7. **Gestión de secretos** con un vault (AWS Secrets Manager, Vault, etc.)
    en vez de un archivo `.env` en el servidor.
 

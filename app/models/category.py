@@ -23,4 +23,4 @@ class Category(Base):
     )
 
     def __repr__(self) -> str:
-        return f""
+        return f"<Category id={self.id} name={self.name!r}>"

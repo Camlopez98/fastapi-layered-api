@@ -4,7 +4,7 @@ Servicio de dominio para la entidad Categoria.
 
 from typing import Optional, Sequence
 
-from app.core.exceptions import DomainError
+from app.core.exceptions import CategoryAlreadyExistsError
 from app.models.category import Category
 from app.repositories.category_repository import CategoryRepository
 from app.schemas.category import CategoryCreate, CategoryUpdate
@@ -13,6 +13,10 @@ from app.schemas.category import CategoryCreate, CategoryUpdate
 class CategoryService:
     def __init__(self, category_repo: CategoryRepository) -> None:
         self.category_repo = category_repo
+
+    async def _ensure_name_available(self, name: str) -> None:
+        if await self.category_repo.get_by_name(name):
+            raise CategoryAlreadyExistsError(f"Category with name '{name}' already exists.")
 
     async def get_by_id(self, category_id: int) -> Optional[Category]:
         return await self.category_repo.get_by_id(category_id)
@@ -26,9 +30,7 @@ class CategoryService:
         return await self.category_repo.list(offset=offset, limit=limit)
 
     async def create_category(self, category_in: CategoryCreate) -> Category:
-        existing = await self.category_repo.get_by_name(category_in.name)
-        if existing:
-            raise DomainError(f"Category with name '{category_in.name}' already exists.")
+        await self._ensure_name_available(category_in.name)
         return await self.category_repo.create(category_in)
 
     async def update_category(
@@ -37,6 +39,8 @@ class CategoryService:
         category = await self.category_repo.get_by_id(category_id)
         if not category:
             return None
+        if category_in.name is not None and category_in.name != category.name:
+            await self._ensure_name_available(category_in.name)
         return await self.category_repo.update(category, category_in)
 
     async def delete_category(self, category_id: int) -> bool:

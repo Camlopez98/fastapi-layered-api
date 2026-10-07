@@ -37,3 +37,7 @@ class ProductNotFoundError(DomainError):
 
 class InvalidProductPriceError(DomainError):
     """El precio del producto no es válido (por ejemplo, negativo)."""
+
+
+class CategoryAlreadyExistsError(DomainError):
+    """Ya existe una categoría con ese nombre."""
